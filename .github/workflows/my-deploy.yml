@@ -23,33 +23,19 @@ jobs:
       - name: Push image to ghcr
         run: docker push ghcr.io/${{ github.repository }}:${{ github.ref_name }}
 
-      # - name: Deploy to YandexCloud vm
-      #   uses: appleboy/ssh-action@v0.1.10
-      #   with:
-      #     host: ${{ secrets.SSH_HOST }}
-      #     username: ${{ secrets.SSH_USER }}
-      #     key: ${{ secrets.SSH_KEY }}
-      #     script: |
-      #       docker login ghcr.io -u sergeev-s -p "${{ secrets.GITHUB_TOKEN }}"
-      #       docker pull ghcr.io/${{ github.repository }}:${{ github.ref_name }} || true
-
-      - name: Upload Nginx config to VM
-        uses: appleboy/scp-action@v0.1.4
-        with:
-          host: ${{ secrets.SSH_HOST }}
-          username: ${{ secrets.SSH_USER }}
-          key: ${{ secrets.SSH_KEY }}
-          source: 'nginx.conf'
-          target: '/etc/nginx/nginx.conf'
-
-      - name: Reload Nginx
+      - name: Deploy to YandexCloud vm
         uses: appleboy/ssh-action@v0.1.10
         with:
           host: ${{ secrets.SSH_HOST }}
           username: ${{ secrets.SSH_USER }}
           key: ${{ secrets.SSH_KEY }}
           script: |
-            sudo nginx -t && sudo systemctl restart nginx
+            docker login ghcr.io -u sergeev-s -p "${{ secrets.GITHUB_TOKEN }}"
+            docker pull ghcr.io/${{ github.repository }}:${{ github.ref_name }} || true
+            docker stop deploy-test-nginx || true
+            docker rm deploy-test-nginx || true
+            docker network create deploy-test-net || true
+            docker run -d --name deploy-test-nginx -p 8080:8080 --network deploy-test-net ghcr.io/${{ github.repository }}:${{ github.ref_name }} 
 
       - name: All done
         run: echo "All done in ${{ github.repository }}"
