@@ -1,0 +1,55 @@
+name: my-deploy
+on:
+  push:
+    branches:
+      - main
+      - dev
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Building Docker image
+        run: docker build . -t ghcr.io/${{ github.repository }}:${{ github.ref_name }}
+
+      - name: Log in to GitHub Container Registry
+        run: echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u sergeev-s --password-stdin
+
+      - name: Push image to ghcr
+        run: docker push ghcr.io/${{ github.repository }}:${{ github.ref_name }}
+
+      # - name: Deploy to YandexCloud vm
+      #   uses: appleboy/ssh-action@v0.1.10
+      #   with:
+      #     host: ${{ secrets.SSH_HOST }}
+      #     username: ${{ secrets.SSH_USER }}
+      #     key: ${{ secrets.SSH_KEY }}
+      #     script: |
+      #       docker login ghcr.io -u sergeev-s -p "${{ secrets.GITHUB_TOKEN }}"
+      #       docker pull ghcr.io/${{ github.repository }}:${{ github.ref_name }} || true
+
+      - name: Upload Nginx config to VM
+        uses: appleboy/scp-action@v0.1.4
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USER }}
+          key: ${{ secrets.SSH_KEY }}
+          source: 'nginx.conf'
+          target: '/etc/nginx/nginx.conf'
+
+      - name: Reload Nginx
+        uses: appleboy/ssh-action@v0.1.10
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USER }}
+          key: ${{ secrets.SSH_KEY }}
+          script: |
+            sudo nginx -t && sudo systemctl restart nginx
+
+      - name: All done
+        run: echo "All done in ${{ github.repository }}"
